@@ -62,10 +62,4 @@ gtui --model grok-fast
 
 [MIT](https://www.google.com/search?q=LICENSE) — Part of the **Pattern Persistence Project**.
 
----
 
-### A few "Engineering Lead" suggestions:
-
-1. **Mascot Hosting:** I used a placeholder path for the mascot image (`assets/mascot.jpg`). You'll need to save the image I generated for you into that folder in your repo for it to show up.
-2. **The "Socket" Strategy:** If you haven't already, you might want to have `gro` emit a JSON stream over a local socket that `gtui` can consume. This keeps the TUI logic entirely separate from the LLM orchestration logic.
-3. **Visualizing Bit-Engine:** Since you're working on the **Bit-Engine** optimization, adding a "Memory Heatmap" component to the TUI could be a killer feature—showing which parts of the LLM activations are being persisted or "bitwise" compressed in real-time.
