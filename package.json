@@ -1,18 +1,38 @@
 {
-  "name": "gtui",
+  "name": "@tjamescouch/gtui",
   "version": "0.1.0",
   "description": "Terminal UI for gro, the provider-agnostic LLM runtime",
   "type": "module",
   "bin": {
     "gtui": "./dist/main.js"
   },
+  "files": [
+    "dist",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "start": "node dist/main.js"
+    "start": "node dist/main.js",
+    "prepublishOnly": "npm run build"
   },
-  "keywords": ["tui", "terminal", "llm", "gro", "ink", "react"],
+  "keywords": [
+    "tui",
+    "terminal",
+    "llm",
+    "gro",
+    "ink",
+    "react"
+  ],
+  "author": "James Couch",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tjamescouch/gtui.git"
+  },
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
     "chalk": "^5.3.0",
     "ink": "^5.1.0",
