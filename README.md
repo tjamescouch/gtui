@@ -2,7 +2,7 @@
 
 # gtui 👾
 
-<img width="464" height="387" alt="Screenshot 2026-02-22 at 5 09 07 AM" src="https://github.com/user-attachments/assets/8dc50476-1a60-4f71-86b9-7308dc46709b" />
+<img width="300" height="280" alt="Screenshot 2026-02-22 at 5 09 07 AM" src="https://github.com/user-attachments/assets/8dc50476-1a60-4f71-86b9-7308dc46709b" />
 
 
 **gtui** is the high-performance Terminal User Interface (TUI) for **[gro](https://www.google.com/search?q=https://github.com/tjamescouch/gro)**. It provides a dedicated, low-latency environment for managing autonomous agents, monitoring tool execution, and visualizing the "Virtual Memory" systems of your LLM runtime.
