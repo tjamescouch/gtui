@@ -1,9 +1,5 @@
 import React, { useState, useCallback } from "react";
 import { Box, useApp, useStdout } from "ink";
-
-/** Sentinel value meaning "scroll to bottom". */
-const SCROLL_BOTTOM = 99999;
-
 import { ChatPanel } from "./components/chat-panel.js";
 import { InputBar } from "./components/input-bar.js";
 import { Sidebar } from "./components/sidebar.js";
@@ -33,7 +29,7 @@ export function App({ model, provider, showThinking: initialShowThinking }: AppP
     setScrollOffset((prev) => {
       if (delta === Infinity) return Infinity;
       if (delta === -Infinity) return 0;
-      return Math.max(0, prev === Infinity ? SCROLL_BOTTOM + delta : prev + delta);
+      return Math.max(0, prev === Infinity ? 99999 + delta : prev + delta);
     });
   }, []);
 
@@ -54,9 +50,9 @@ export function App({ model, provider, showThinking: initialShowThinking }: AppP
 
   const handleSubmit = useCallback(
     (text: string) => {
-    sendMessage(text);
-    setScrollOffset(Infinity); // Infinity → SCROLL_BOTTOM via ChatPanel prop
-  },
+      sendMessage(text);
+      setScrollOffset(Infinity); // auto-scroll to bottom on send
+    },
     [sendMessage]
   );
 
@@ -80,9 +76,9 @@ export function App({ model, provider, showThinking: initialShowThinking }: AppP
           isFocused={activePanel === "sidebar"}
         />
         <Box flexDirection="column" flexGrow={1}>
-      <ChatPanel
-        messages={messages}
-        scrollOffset={scrollOffset === Infinity ? SCROLL_BOTTOM : scrollOffset}
+          <ChatPanel
+            messages={messages}
+            scrollOffset={scrollOffset === Infinity ? 99999 : scrollOffset}
             height={chatHeight}
             isFocused={activePanel === "chat"}
             showThinking={showThinking}

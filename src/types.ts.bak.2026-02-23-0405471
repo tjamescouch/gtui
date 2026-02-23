@@ -28,8 +28,7 @@ export type GroEvent =
   | { type: "token"; token: string }
   | { type: "reasoning"; token: string }
   | { type: "state-vector"; state: Record<string, number> }
-  | { type: "result"; result: string }
-  | { type: "usage"; inputTokens: number; outputTokens: number };
+  | { type: "result"; result: string };
 
 export type VimMode = "normal" | "insert";
 

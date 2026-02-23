@@ -2,8 +2,6 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { spawn, type ChildProcess } from "node:child_process";
 import type { Message, GroEvent, Usage } from "../types.js";
 
-const GRO_OUTPUT_FORMAT = "stream-json";
-
 interface UseGroOptions {
   model?: string;
   provider?: string;
@@ -70,8 +68,6 @@ export function useGro(options: UseGroOptions = {}): UseGroReturn {
       streamingIdRef.current = null;
       setIsStreaming(false);
       procRef.current = null;
-    } else if (event.type === "usage") {
-      setUsage({ inputTokens: event.inputTokens, outputTokens: event.outputTokens });
     }
   }, []);
 
@@ -117,7 +113,7 @@ export function useGro(options: UseGroOptions = {}): UseGroReturn {
       bufferRef.current = "";
 
       // Build gro command args
-      const args = ["--output-format", GRO_OUTPUT_FORMAT];
+      const args = ["--output-format", "stream-json"];
       if (options.model) {
         args.push("--model", options.model);
       }
