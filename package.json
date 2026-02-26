@@ -1,6 +1,6 @@
 {
   "name": "@tjamescouch/gtui",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Terminal UI for gro, the provider-agnostic LLM runtime",
   "type": "module",
   "bin": {

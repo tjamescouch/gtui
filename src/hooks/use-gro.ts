@@ -28,6 +28,8 @@ export function useGro(options: UseGroOptions = {}): UseGroReturn {
   const bufferRef = useRef("");
   const streamingIdRef = useRef<string | null>(null);
   const startedRef = useRef(false);
+  const readyRef = useRef(false);
+  const pendingPromptRef = useRef<string | null>(null);
 
   const handleEvent = useCallback((event: GroEvent) => {
     if (event.type === "token") {
@@ -105,24 +107,32 @@ export function useGro(options: UseGroOptions = {}): UseGroReturn {
 
     proc.stderr?.on("data", (chunk: Buffer) => {
       const text = chunk.toString();
-      // Detect readline prompt (with ANSI codes stripped) = response complete
+      // Detect readline prompt (with ANSI codes stripped)
       const stripped = text.replace(/\x1b\[[0-9;]*m/g, "");
-      if (/you > /m.test(stripped) && streamingIdRef.current) {
-        // Flush any remaining stdout buffer
-        if (bufferRef.current.trim()) {
-          processLine(bufferRef.current);
-          bufferRef.current = "";
+      if (/you > /m.test(stripped)) {
+        if (!readyRef.current) {
+          // First prompt — process is ready to accept input
+          readyRef.current = true;
+          if (pendingPromptRef.current && proc.stdin?.writable) {
+            proc.stdin.write(pendingPromptRef.current + "\n");
+            pendingPromptRef.current = null;
+          }
+        } else if (streamingIdRef.current) {
+          // Subsequent prompts — response complete
+          if (bufferRef.current.trim()) {
+            processLine(bufferRef.current);
+            bufferRef.current = "";
+          }
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === streamingIdRef.current
+                ? { ...m, isStreaming: false }
+                : m
+            )
+          );
+          streamingIdRef.current = null;
+          setIsStreaming(false);
         }
-        // Finalize the streaming message
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === streamingIdRef.current
-              ? { ...m, isStreaming: false }
-              : m
-          )
-        );
-        streamingIdRef.current = null;
-        setIsStreaming(false);
       }
     });
 
@@ -205,9 +215,11 @@ export function useGro(options: UseGroOptions = {}): UseGroReturn {
       setIsStreaming(true);
       bufferRef.current = "";
 
-      // Write prompt to the persistent process stdin
-      if (procRef.current?.stdin?.writable) {
+      // Write prompt to the persistent process stdin, or queue if not ready
+      if (readyRef.current && procRef.current?.stdin?.writable) {
         procRef.current.stdin.write(text + "\n");
+      } else {
+        pendingPromptRef.current = text;
       }
     },
     [isStreaming, startProcess]
@@ -222,6 +234,8 @@ export function useGro(options: UseGroOptions = {}): UseGroReturn {
     setIsStreaming(false);
     streamingIdRef.current = null;
     startedRef.current = false;
+    readyRef.current = false;
+    pendingPromptRef.current = null;
   }, []);
 
   return { messages, isStreaming, usage, sendMessage, clearMessages };
