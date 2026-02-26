@@ -8,12 +8,52 @@ function stripAnsi(s: string): string {
   return s.replace(/\x1b\[[0-9;]*m/g, "");
 }
 
+/** Hard-break a string (possibly with ANSI codes) at maxWidth visible chars. */
+function hardBreak(s: string, maxWidth: number): string[] {
+  const pieces: string[] = [];
+  let buf = "";
+  let vis = 0;
+  // Walk character by character, preserving ANSI sequences intact
+  const ansiRe = /\x1b\[[0-9;]*m/g;
+  let last = 0;
+  let match: RegExpExecArray | null;
+  while ((match = ansiRe.exec(s)) !== null) {
+    // Process plain text before this ANSI sequence
+    const plain = s.slice(last, match.index);
+    for (const ch of plain) {
+      if (vis >= maxWidth) {
+        pieces.push(buf);
+        buf = "";
+        vis = 0;
+      }
+      buf += ch;
+      vis++;
+    }
+    // ANSI escape — append without counting visible width
+    buf += match[0];
+    last = ansiRe.lastIndex;
+  }
+  // Remaining plain text after last ANSI sequence
+  const tail = s.slice(last);
+  for (const ch of tail) {
+    if (vis >= maxWidth) {
+      pieces.push(buf);
+      buf = "";
+      vis = 0;
+    }
+    buf += ch;
+    vis++;
+  }
+  if (buf) pieces.push(buf);
+  return pieces;
+}
+
 /** Wrap a single line to fit within maxWidth visible characters. */
 function wrapLine(line: string, maxWidth: number): string[] {
   const visible = stripAnsi(line);
   if (visible.length <= maxWidth) return [line];
 
-  // Simple word-wrap on the raw string, tracking visible width
+  // Word-wrap on the raw string, tracking visible width
   const words = line.split(/( +)/);
   const lines: string[] = [];
   let current = "";
@@ -21,6 +61,21 @@ function wrapLine(line: string, maxWidth: number): string[] {
 
   for (const word of words) {
     const wordVisible = stripAnsi(word).length;
+    // Hard-break words that are longer than maxWidth
+    if (wordVisible > maxWidth) {
+      if (current) {
+        lines.push(current);
+        current = "";
+        currentVisible = 0;
+      }
+      const broken = hardBreak(word, maxWidth);
+      for (let i = 0; i < broken.length - 1; i++) {
+        lines.push(broken[i]);
+      }
+      current = broken[broken.length - 1];
+      currentVisible = stripAnsi(current).length;
+      continue;
+    }
     if (currentVisible + wordVisible > maxWidth && currentVisible > 0) {
       lines.push(current);
       current = "";
@@ -107,8 +162,10 @@ export function ChatPanel({
     const blocks = messages.map((m) => renderMessage(m, showThinking));
     const rawLines = blocks.join("\n\n").split("\n");
 
-    // Wrap lines to fit available width (panel width minus borders and padding)
-    const availableWidth = Math.max(20, termWidth - 30); // sidebar + borders + padding
+    // Wrap lines to fit available width
+    // Sidebar is 20% of termWidth (min 20). Chat panel gets the rest minus borders (2) and paddingX (2).
+    const sidebarWidth = Math.max(20, Math.floor(termWidth * 0.2));
+    const availableWidth = Math.max(20, termWidth - sidebarWidth - 4);
     const allLines = rawLines.flatMap((line) => wrapLine(line, availableWidth));
 
     const totalLines = allLines.length;
@@ -143,8 +200,8 @@ export function ChatPanel({
           <Text color="magenta" dimColor> [CoT]</Text>
         )}
       </Box>
-      <Box flexDirection="column" flexGrow={1}>
-        <Text>{rendered}</Text>
+      <Box flexDirection="column" flexGrow={1} overflow="hidden">
+        <Text wrap="truncate-end">{rendered}</Text>
       </Box>
     </Box>
   );
