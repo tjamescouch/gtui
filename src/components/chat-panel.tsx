@@ -1,7 +1,37 @@
 import React, { useMemo } from "react";
-import { Box, Text } from "ink";
+import { Box, Text, useStdout } from "ink";
 import chalk from "chalk";
 import type { Message } from "../types.js";
+
+/** Strip ANSI escape codes to get visible character count. */
+function stripAnsi(s: string): string {
+  return s.replace(/\x1b\[[0-9;]*m/g, "");
+}
+
+/** Wrap a single line to fit within maxWidth visible characters. */
+function wrapLine(line: string, maxWidth: number): string[] {
+  const visible = stripAnsi(line);
+  if (visible.length <= maxWidth) return [line];
+
+  // Simple word-wrap on the raw string, tracking visible width
+  const words = line.split(/( +)/);
+  const lines: string[] = [];
+  let current = "";
+  let currentVisible = 0;
+
+  for (const word of words) {
+    const wordVisible = stripAnsi(word).length;
+    if (currentVisible + wordVisible > maxWidth && currentVisible > 0) {
+      lines.push(current);
+      current = "";
+      currentVisible = 0;
+    }
+    current += word;
+    currentVisible += wordVisible;
+  }
+  if (current) lines.push(current);
+  return lines;
+}
 
 interface ChatPanelProps {
   messages: Message[];
@@ -66,13 +96,20 @@ export function ChatPanel({
   isFocused,
   showThinking,
 }: ChatPanelProps) {
+  const { stdout } = useStdout();
+  const termWidth = stdout?.columns ?? 120;
+
   const rendered = useMemo(() => {
     if (messages.length === 0) {
       return chalk.gray("No messages yet. Type a message to begin.");
     }
 
     const blocks = messages.map((m) => renderMessage(m, showThinking));
-    const allLines = blocks.join("\n\n").split("\n");
+    const rawLines = blocks.join("\n\n").split("\n");
+
+    // Wrap lines to fit available width (panel width minus borders and padding)
+    const availableWidth = Math.max(20, termWidth - 30); // sidebar + borders + padding
+    const allLines = rawLines.flatMap((line) => wrapLine(line, availableWidth));
 
     const totalLines = allLines.length;
     const visibleHeight = Math.max(1, height - 2); // account for borders
@@ -86,7 +123,7 @@ export function ChatPanel({
     }
 
     return allLines.slice(startLine, startLine + visibleHeight).join("\n");
-  }, [messages, scrollOffset, height, showThinking]);
+  }, [messages, scrollOffset, height, showThinking, termWidth]);
 
   const borderColor = isFocused ? "blue" : "gray";
 

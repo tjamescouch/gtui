@@ -26,18 +26,8 @@ export function useGro(options: UseGroOptions = {}): UseGroReturn {
   const [usage, setUsage] = useState<Usage>({ inputTokens: 0, outputTokens: 0 });
   const procRef = useRef<ChildProcess | null>(null);
   const bufferRef = useRef("");
-  const stderrRef = useRef("");
   const streamingIdRef = useRef<string | null>(null);
-
-  // Clean up on unmount
-  useEffect(() => {
-    return () => {
-      if (procRef.current) {
-        procRef.current.kill();
-        procRef.current = null;
-      }
-    };
-  }, []);
+  const startedRef = useRef(false);
 
   const handleEvent = useCallback((event: GroEvent) => {
     if (event.type === "token") {
@@ -67,7 +57,6 @@ export function useGro(options: UseGroOptions = {}): UseGroReturn {
       }
       streamingIdRef.current = null;
       setIsStreaming(false);
-      procRef.current = null;
     }
   }, []);
 
@@ -85,11 +74,116 @@ export function useGro(options: UseGroOptions = {}): UseGroReturn {
     [handleEvent]
   );
 
+  /** Start the persistent gro process in interactive mode. */
+  const startProcess = useCallback(() => {
+    if (startedRef.current) return;
+    startedRef.current = true;
+
+    const args = ["-i", "--output-format", "stream-json", "--bash"];
+    if (options.model) {
+      args.push("--model", options.model);
+    }
+    if (options.provider) {
+      args.push("--provider", options.provider);
+    }
+
+    const proc = spawn("gro", args, {
+      stdio: ["pipe", "pipe", "pipe"],
+      env: { ...process.env },
+    });
+
+    procRef.current = proc;
+
+    proc.stdout?.on("data", (chunk: Buffer) => {
+      bufferRef.current += chunk.toString();
+      const lines = bufferRef.current.split("\n");
+      bufferRef.current = lines.pop() ?? "";
+      for (const line of lines) {
+        processLine(line);
+      }
+    });
+
+    proc.stderr?.on("data", (chunk: Buffer) => {
+      const text = chunk.toString();
+      // Detect readline prompt (with ANSI codes stripped) = response complete
+      const stripped = text.replace(/\x1b\[[0-9;]*m/g, "");
+      if (/you > /m.test(stripped) && streamingIdRef.current) {
+        // Flush any remaining stdout buffer
+        if (bufferRef.current.trim()) {
+          processLine(bufferRef.current);
+          bufferRef.current = "";
+        }
+        // Finalize the streaming message
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === streamingIdRef.current
+              ? { ...m, isStreaming: false }
+              : m
+          )
+        );
+        streamingIdRef.current = null;
+        setIsStreaming(false);
+      }
+    });
+
+    proc.on("close", (code) => {
+      if (bufferRef.current.trim()) {
+        processLine(bufferRef.current);
+        bufferRef.current = "";
+      }
+
+      if (streamingIdRef.current) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === streamingIdRef.current
+              ? { ...m, content: m.content || `[gro exited with code ${code}]`, isStreaming: false }
+              : m
+          )
+        );
+        streamingIdRef.current = null;
+        setIsStreaming(false);
+      }
+
+      procRef.current = null;
+      startedRef.current = false;
+    });
+
+    proc.on("error", (err) => {
+      if (streamingIdRef.current) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === streamingIdRef.current
+              ? { ...m, content: `[Error: ${err.message}]`, isStreaming: false }
+              : m
+          )
+        );
+        streamingIdRef.current = null;
+        setIsStreaming(false);
+      }
+      procRef.current = null;
+      startedRef.current = false;
+    });
+  }, [options.model, options.provider, processLine]);
+
+  // Clean up on unmount
+  useEffect(() => {
+    return () => {
+      if (procRef.current) {
+        procRef.current.kill();
+        procRef.current = null;
+      }
+    };
+  }, []);
+
   const sendMessage = useCallback(
     (text: string) => {
       if (isStreaming) return;
 
-      // Add user message
+      // Start persistent process on first message
+      if (!startedRef.current) {
+        startProcess();
+      }
+
       const userMsg: Message = {
         id: makeId(),
         role: "user",
@@ -97,7 +191,6 @@ export function useGro(options: UseGroOptions = {}): UseGroReturn {
         timestamp: Date.now(),
       };
 
-      // Add placeholder assistant message
       const assistantId = makeId();
       const assistantMsg: Message = {
         id: assistantId,
@@ -112,98 +205,12 @@ export function useGro(options: UseGroOptions = {}): UseGroReturn {
       setIsStreaming(true);
       bufferRef.current = "";
 
-      // Build gro command args
-      const args = ["--output-format", "stream-json"];
-      if (options.model) {
-        args.push("--model", options.model);
+      // Write prompt to the persistent process stdin
+      if (procRef.current?.stdin?.writable) {
+        procRef.current.stdin.write(text + "\n");
       }
-      if (options.provider) {
-        args.push("--provider", options.provider);
-      }
-      args.push(text);
-
-      const proc = spawn("gro", args, {
-        stdio: ["pipe", "pipe", "pipe"],
-        env: { ...process.env },
-      });
-
-      procRef.current = proc;
-
-      proc.stdout?.on("data", (chunk: Buffer) => {
-        bufferRef.current += chunk.toString();
-        const lines = bufferRef.current.split("\n");
-        // Keep the last incomplete line in the buffer
-        bufferRef.current = lines.pop() ?? "";
-        for (const line of lines) {
-          processLine(line);
-        }
-      });
-
-      proc.stderr?.on("data", (chunk: Buffer) => {
-        stderrRef.current += chunk.toString();
-      });
-
-      proc.on("close", (code) => {
-        // Process any remaining buffer
-        if (bufferRef.current.trim()) {
-          processLine(bufferRef.current);
-          bufferRef.current = "";
-        }
-
-        if (streamingIdRef.current) {
-          if (code !== 0) {
-            // Extract a useful error from stderr
-            const errLines = stderrRef.current.trim().split("\n");
-            const errMsg = errLines.find((l) => l.includes("error:")) || errLines[errLines.length - 1] || `gro exited with code ${code}`;
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === streamingIdRef.current
-                  ? {
-                      ...m,
-                      content: m.content || `[${errMsg.replace(/\x1b\[[0-9;]*m/g, "").trim()}]`,
-                      isStreaming: false,
-                    }
-                  : m
-              )
-            );
-          } else {
-            // Successful exit — finalize the streaming message with accumulated tokens
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === streamingIdRef.current
-                  ? { ...m, isStreaming: false }
-                  : m
-              )
-            );
-          }
-          streamingIdRef.current = null;
-          setIsStreaming(false);
-        }
-
-        stderrRef.current = "";
-        procRef.current = null;
-      });
-
-      proc.on("error", (err) => {
-        if (streamingIdRef.current) {
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === streamingIdRef.current
-                ? {
-                    ...m,
-                    content: `[Error: ${err.message}]`,
-                    isStreaming: false,
-                  }
-                : m
-            )
-          );
-          streamingIdRef.current = null;
-          setIsStreaming(false);
-        }
-        procRef.current = null;
-      });
     },
-    [isStreaming, options.model, options.provider, processLine]
+    [isStreaming, startProcess]
   );
 
   const clearMessages = useCallback(() => {
@@ -214,6 +221,7 @@ export function useGro(options: UseGroOptions = {}): UseGroReturn {
     setMessages([]);
     setIsStreaming(false);
     streamingIdRef.current = null;
+    startedRef.current = false;
   }, []);
 
   return { messages, isStreaming, usage, sendMessage, clearMessages };
