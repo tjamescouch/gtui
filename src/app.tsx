@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useRef } from "react";
 import { Box, useApp, useStdout } from "ink";
 import { ChatPanel } from "./components/chat-panel.js";
 import { InputBar } from "./components/input-bar.js";
@@ -20,12 +20,15 @@ export function App({ model, provider, showThinking: initialShowThinking }: AppP
 
   const [scrollOffset, setScrollOffset] = useState(Infinity); // start at bottom
   const [showThinking, setShowThinking] = useState(initialShowThinking ?? false);
+  const [showTools, setShowTools] = useState(false);
+  const userScrolledRef = useRef(false);
   const { messages, isStreaming, usage, sendMessage } = useGro({
     model,
     provider,
   });
 
   const handleScroll = useCallback((delta: number) => {
+    userScrolledRef.current = true;
     setScrollOffset((prev) => {
       if (delta === Infinity) return Infinity;
       if (delta === -Infinity) return 0;
@@ -41,24 +44,30 @@ export function App({ model, provider, showThinking: initialShowThinking }: AppP
     setShowThinking((prev) => !prev);
   }, []);
 
+  const toggleTools = useCallback(() => {
+    setShowTools((prev) => !prev);
+  }, []);
+
   const { mode, activePanel, setMode } = useVimKeys({
     onQuit: handleQuit,
     onScroll: handleScroll,
     onToggleThinking: toggleThinking,
+    onToggleTools: toggleTools,
     isStreaming,
   });
 
   const handleSubmit = useCallback(
     (text: string) => {
       sendMessage(text);
+      userScrolledRef.current = false;
       setScrollOffset(Infinity); // auto-scroll to bottom on send
     },
     [sendMessage]
   );
 
-  // Auto-scroll to bottom when streaming
+  // Auto-scroll to bottom when streaming, but only if user hasn't manually scrolled
   React.useEffect(() => {
-    if (isStreaming) {
+    if (isStreaming && !userScrolledRef.current) {
       setScrollOffset(Infinity);
     }
   }, [isStreaming, messages]);
@@ -82,9 +91,11 @@ export function App({ model, provider, showThinking: initialShowThinking }: AppP
             height={chatHeight}
             isFocused={activePanel === "chat"}
             showThinking={showThinking}
+            showTools={showTools}
           />
           <InputBar
             onSubmit={handleSubmit}
+            onScroll={handleScroll}
             isStreaming={isStreaming}
             mode={mode}
             isFocused={activePanel === "chat"}

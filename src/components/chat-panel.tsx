@@ -94,6 +94,7 @@ interface ChatPanelProps {
   height: number;
   isFocused: boolean;
   showThinking: boolean;
+  showTools: boolean;
 }
 
 function formatMarkdown(text: string): string {
@@ -118,7 +119,7 @@ function formatMarkdown(text: string): string {
   return result;
 }
 
-function renderMessage(msg: Message, showThinking: boolean): string {
+function renderMessage(msg: Message, showThinking: boolean, showTools: boolean): string {
   const roleLabel =
     msg.role === "user"
       ? chalk.blue.bold("You")
@@ -137,6 +138,14 @@ function renderMessage(msg: Message, showThinking: boolean): string {
     parts.push(`${thinkingHeader}\n${thinkingContent}\n${thinkingEnd}`);
   }
 
+  // Show tool calls if enabled and present
+  if (showTools && msg.toolCalls && msg.toolCalls.length > 0) {
+    const toolLines = msg.toolCalls
+      .map((tc) => chalk.dim.yellow(`  → ${tc.name}('${tc.snippet}')`))
+      .join("\n");
+    parts.push(toolLines);
+  }
+
   const content = formatMarkdown(msg.content);
   const cursor = msg.isStreaming ? chalk.yellow("█") : "";
   parts.push(`${content}${cursor}`);
@@ -150,6 +159,7 @@ export function ChatPanel({
   height,
   isFocused,
   showThinking,
+  showTools,
 }: ChatPanelProps) {
   const { stdout } = useStdout();
   const termWidth = stdout?.columns ?? 120;
@@ -159,7 +169,7 @@ export function ChatPanel({
       return chalk.gray("No messages yet. Type a message to begin.");
     }
 
-    const blocks = messages.map((m) => renderMessage(m, showThinking));
+    const blocks = messages.map((m) => renderMessage(m, showThinking, showTools));
     const rawLines = blocks.join("\n\n").split("\n");
 
     // Wrap lines to fit available width
@@ -180,7 +190,7 @@ export function ChatPanel({
     }
 
     return allLines.slice(startLine, startLine + visibleHeight).join("\n");
-  }, [messages, scrollOffset, height, showThinking, termWidth]);
+  }, [messages, scrollOffset, height, showThinking, showTools, termWidth]);
 
   const borderColor = isFocused ? "blue" : "gray";
 
@@ -198,6 +208,9 @@ export function ChatPanel({
         </Text>
         {showThinking && (
           <Text color="magenta" dimColor> [CoT]</Text>
+        )}
+        {showTools && (
+          <Text color="yellow" dimColor> [Tools]</Text>
         )}
       </Box>
       <Box flexDirection="column" flexGrow={1} overflow="hidden">

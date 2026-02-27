@@ -4,12 +4,13 @@ import type { VimMode } from "../types.js";
 
 interface InputBarProps {
   onSubmit: (text: string) => void;
+  onScroll?: (delta: number) => void;
   isStreaming: boolean;
   mode: VimMode;
   isFocused: boolean;
 }
 
-export function InputBar({ onSubmit, isStreaming, mode, isFocused }: InputBarProps) {
+export function InputBar({ onSubmit, onScroll, isStreaming, mode, isFocused }: InputBarProps) {
   const [value, setValue] = useState("");
   const [cursorPos, setCursorPos] = useState(0);
 
@@ -22,8 +23,17 @@ export function InputBar({ onSubmit, isStreaming, mode, isFocused }: InputBarPro
       rightArrow?: boolean;
       escape?: boolean;
       tab?: boolean;
+      ctrl?: boolean;
     }) => {
       if (mode !== "insert" || !isFocused) return;
+
+      // Intercept Ctrl+j/k/d/u for scrolling before character input
+      if (key.ctrl && onScroll) {
+        if (input === "j") { onScroll(1); return; }
+        if (input === "k") { onScroll(-1); return; }
+        if (input === "d") { onScroll(10); return; }
+        if (input === "u") { onScroll(-10); return; }
+      }
 
       if (key.return) {
         const trimmed = value.trim();

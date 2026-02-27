@@ -48,6 +48,21 @@ export function useGro(options: UseGroOptions = {}): UseGroReturn {
           m.id === id ? { ...m, reasoning: (m.reasoning ?? "") + event.token } : m
         );
       });
+    } else if (event.type === "tool_call") {
+      setMessages((prev) => {
+        const id = streamingIdRef.current;
+        if (!id) return prev;
+        return prev.map((m) =>
+          m.id === id
+            ? { ...m, toolCalls: [...(m.toolCalls ?? []), { name: event.name, snippet: event.snippet }] }
+            : m
+        );
+      });
+    } else if (event.type === "api_usage") {
+      setUsage({
+        inputTokens: event.input_tokens,
+        outputTokens: event.output_tokens,
+      });
     } else if (event.type === "result") {
       const id = streamingIdRef.current;
       if (id) {

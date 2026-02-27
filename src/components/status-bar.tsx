@@ -34,7 +34,7 @@ export function StatusBar({
           msgs:{messageCount}
         </Text>
         <Text color="gray">
-          tokens:{usage.inputTokens + usage.outputTokens}
+          in:{usage.inputTokens} out:{usage.outputTokens}
         </Text>
         <Text color="cyan" bold>
           gtui

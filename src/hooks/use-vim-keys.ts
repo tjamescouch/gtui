@@ -6,6 +6,7 @@ interface UseVimKeysOptions {
   onQuit: () => void;
   onScroll: (delta: number) => void;
   onToggleThinking?: () => void;
+  onToggleTools?: () => void;
   onSubmit?: (text: string) => void;
   isStreaming?: boolean;
 }
@@ -21,7 +22,15 @@ export function useVimKeys(options: UseVimKeysOptions): UseVimKeysReturn {
   const [activePanel, setActivePanel] = useState<Panel>("chat");
 
   const handleInput = useCallback(
-    (input: string, key: { escape?: boolean; tab?: boolean }) => {
+    (input: string, key: { escape?: boolean; tab?: boolean; ctrl?: boolean }) => {
+      // Ctrl+j/k and Ctrl+d/u work in BOTH modes
+      if (key.ctrl) {
+        if (input === "j") { options.onScroll(1); return; }
+        if (input === "k") { options.onScroll(-1); return; }
+        if (input === "d") { options.onScroll(10); return; }
+        if (input === "u") { options.onScroll(-10); return; }
+      }
+
       if (mode === "normal") {
         switch (input) {
           case "q":
@@ -49,6 +58,9 @@ export function useVimKeys(options: UseVimKeysOptions): UseVimKeysReturn {
             return;
           case "t":
             options.onToggleThinking?.();
+            return;
+          case "s":
+            options.onToggleTools?.();
             return;
         }
 

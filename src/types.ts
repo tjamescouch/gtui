@@ -5,6 +5,7 @@ export interface Message {
   role: Role;
   content: string;
   reasoning?: string;
+  toolCalls?: { name: string; snippet: string }[];
   timestamp: number;
   isStreaming?: boolean;
 }
@@ -28,7 +29,9 @@ export type GroEvent =
   | { type: "token"; token: string }
   | { type: "reasoning"; token: string }
   | { type: "state-vector"; state: Record<string, number> }
-  | { type: "result"; result: string };
+  | { type: "result"; result: string }
+  | { type: "tool_call"; name: string; snippet: string }
+  | { type: "api_usage"; input_tokens: number; output_tokens: number; input_kb: number; output_kb: number };
 
 export type VimMode = "normal" | "insert";
 
