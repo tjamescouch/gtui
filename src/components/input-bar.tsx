@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useRef, useEffect } from "react";
 import { Box, Text, useInput } from "ink";
 import type { VimMode } from "../types.js";
 
@@ -13,6 +13,18 @@ interface InputBarProps {
 export function InputBar({ onSubmit, onScroll, isStreaming, mode, isFocused }: InputBarProps) {
   const [value, setValue] = useState("");
   const [cursorPos, setCursorPos] = useState(0);
+  const submitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const valueRef = useRef("");
+
+  // Keep ref in sync for async access in timeout callback
+  useEffect(() => { valueRef.current = value; }, [value]);
+
+  // Clean up timer on unmount
+  useEffect(() => {
+    return () => {
+      if (submitTimerRef.current) clearTimeout(submitTimerRef.current);
+    };
+  }, []);
 
   const handleInput = useCallback(
     (input: string, key: {
@@ -36,12 +48,21 @@ export function InputBar({ onSubmit, onScroll, isStreaming, mode, isFocused }: I
       }
 
       if (key.return) {
-        const trimmed = value.trim();
-        if (trimmed && !isStreaming) {
-          onSubmit(trimmed);
-          setValue("");
-          setCursorPos(0);
+        if (submitTimerRef.current) {
+          // Paste continuation — insert newline into value
+          clearTimeout(submitTimerRef.current);
+          setValue((v) => v.slice(0, cursorPos) + "\n" + v.slice(cursorPos));
+          setCursorPos((p) => p + 1);
         }
+        submitTimerRef.current = setTimeout(() => {
+          submitTimerRef.current = null;
+          const trimmed = valueRef.current.trim();
+          if (trimmed && !isStreaming) {
+            onSubmit(trimmed);
+            setValue("");
+            setCursorPos(0);
+          }
+        }, 50);
         return;
       }
 
@@ -70,9 +91,22 @@ export function InputBar({ onSubmit, onScroll, isStreaming, mode, isFocused }: I
       if (input && !key.return) {
         setValue((v) => v.slice(0, cursorPos) + input + v.slice(cursorPos));
         setCursorPos((p) => p + input.length);
+        // If paste timer is active, reset it (more input arriving during paste)
+        if (submitTimerRef.current) {
+          clearTimeout(submitTimerRef.current);
+          submitTimerRef.current = setTimeout(() => {
+            submitTimerRef.current = null;
+            const trimmed = valueRef.current.trim();
+            if (trimmed && !isStreaming) {
+              onSubmit(trimmed);
+              setValue("");
+              setCursorPos(0);
+            }
+          }, 50);
+        }
       }
     },
-    [mode, isFocused, value, cursorPos, isStreaming, onSubmit]
+    [mode, isFocused, value, cursorPos, isStreaming, onSubmit, onScroll]
   );
 
   useInput(handleInput);
