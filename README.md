@@ -58,8 +58,17 @@ gtui --model grok-fast
 * **Unix Domain Sockets / IPC:** For zero-latency communication with the `gro` background process.
 * **Metal Performance Shaders (MPS):** (Experimental) Local visualization hooks for Mac Studio.
 
+## Security
+
+gtui spawns `gro` as a subprocess with `--bash` enabled. The LLM has shell access, file read/write, and any configured MCP tools. gro's built-in tool approval prompts do not apply in this mode (no TTY — gro runs as a piped subprocess).
+
+**Recommendations:**
+- Do not run gtui with MCP servers that provide network access unless you trust the model
+- Use in containerized environments for untrusted workloads
+- Consider running without `--bash` by modifying the spawn arguments
+
 ## License
 
-[MIT](https://www.google.com/search?q=LICENSE) — Part of the **Pattern Persistence Project**.
+MIT
 
 
